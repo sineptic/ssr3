@@ -20,6 +20,15 @@ fn main() {
     enter_raw_terminal_mode(&mut stdout).unwrap();
 
     let mut cursor = 0;
+    for (i, block) in blocks.iter().enumerate() {
+        match block {
+            DisplayBlock::Text(_) => {}
+            DisplayBlock::HiddenText { .. } => {
+                cursor = i;
+                break;
+            }
+        }
+    }
     loop {
         display_blocks_interactive_mode(&mut stdout, &blocks, cursor);
         let event = crossterm::event::read().unwrap();
