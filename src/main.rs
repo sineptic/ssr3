@@ -34,9 +34,8 @@ fn main() {
             }
         }
     }
-    display_blocks_answer_overview(&mut stdout, &blocks);
-    std::io::read_to_string(std::io::stdin()).unwrap();
     reset_terminal(&mut stdout).unwrap();
+    print_blocks_answer_overview(&mut stdout, &blocks);
 }
 
 fn enter_raw_terminal_mode(stdout: &mut impl std::io::Write) -> std::io::Result<()> {
@@ -176,13 +175,7 @@ fn handle_event(
     false
 }
 
-fn display_blocks_answer_overview(stdout: &mut std::io::Stdout, blocks: &Vec<DisplayBlock>) {
-    crossterm::execute!(
-        stdout,
-        crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
-        crossterm::cursor::MoveTo(0, 0)
-    )
-    .unwrap();
+fn print_blocks_answer_overview(stdout: &mut std::io::Stdout, blocks: &Vec<DisplayBlock>) {
     print!("\x1b[0m");
     for block in blocks {
         match block {
