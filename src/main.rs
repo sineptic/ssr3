@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{io::Write, time::Duration};
 
 const EXAMPLE_TEXT: &str = r#"
 13 task - `hi`
@@ -30,7 +30,7 @@ fn main() {
         }
     }
     loop {
-        display_blocks_interactive_mode(&mut stdout, &blocks, cursor);
+        display_blocks_interactive_mode(&mut stdout, &blocks, cursor).unwrap();
         let event = crossterm::event::read().unwrap();
         if handle_event(event, &mut cursor, &mut blocks) {
             break;
@@ -44,7 +44,7 @@ fn main() {
         }
     }
     reset_terminal(&mut stdout).unwrap();
-    print_blocks_answer_overview(&mut stdout, &blocks);
+    print_blocks_answer_overview(&mut stdout, &blocks).unwrap();
 }
 
 fn enter_raw_terminal_mode(stdout: &mut impl std::io::Write) -> std::io::Result<()> {
@@ -184,12 +184,15 @@ fn handle_event(
     false
 }
 
-fn print_blocks_answer_overview(stdout: &mut std::io::Stdout, blocks: &Vec<DisplayBlock>) {
-    print!("\x1b[0m");
+fn print_blocks_answer_overview(
+    stdout: &mut std::io::Stdout,
+    blocks: &Vec<DisplayBlock>,
+) -> std::io::Result<()> {
+    write!(stdout, "\x1b[0m")?;
     for block in blocks {
         match block {
             DisplayBlock::Text(inner) => {
-                print!("{}", inner.replace("\n", "\r\n"));
+                write!(stdout, "{}", inner.replace("\n", "\r\n"))?;
             }
             DisplayBlock::HiddenText {
                 original_text,
@@ -200,42 +203,42 @@ fn print_blocks_answer_overview(stdout: &mut std::io::Stdout, blocks: &Vec<Displ
                 let user_input = user_input.trim();
                 let original_text = original_text.trim();
                 if original_text.is_empty() {
-                    print!("\x1b[3;32m<empty>\x1b[0m");
+                    write!(stdout, "\x1b[3;32m<empty>\x1b[0m")?;
                 } else {
-                    print!("\x1b[3;4;32m{}\x1b[0m", original_text);
+                    write!(stdout, "\x1b[3;4;32m{}\x1b[0m", original_text)?;
                 }
                 if user_input != original_text {
-                    print!(" ");
+                    write!(stdout, " ")?;
                     if user_input.is_empty() {
-                        print!("\x1b[3;33m<empty>\x1b[0m");
+                        write!(stdout, "\x1b[3;33m<empty>\x1b[0m")?;
                     } else {
-                        print!("\x1b[3;4;33m{}\x1b[0m", user_input);
+                        write!(stdout, "\x1b[3;4;33m{}\x1b[0m", user_input)?;
                     }
                 }
             }
         }
     }
-    println!();
-    crossterm::execute!(stdout, crossterm::cursor::Hide).unwrap();
+    writeln!(stdout)?;
+    stdout.flush()?;
+    Ok(())
 }
 
 fn display_blocks_interactive_mode(
     stdout: &mut std::io::Stdout,
     blocks: &Vec<DisplayBlock>,
     cursor: usize,
-) {
-    crossterm::execute!(
+) -> std::io::Result<()> {
+    crossterm::queue!(
         stdout,
         crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
         crossterm::cursor::MoveTo(0, 0)
-    )
-    .unwrap();
-    print!("\x1b[0m");
+    )?;
+    write!(stdout, "\x1b[0m")?;
     let mut interactive_element_in_focus = false;
     for (i, block) in blocks.iter().enumerate() {
         match block {
             DisplayBlock::Text(inner) => {
-                print!("{}", inner.replace("\n", "\r\n"));
+                write!(stdout, "{}", inner.replace("\n", "\r\n"))?;
             }
             DisplayBlock::HiddenText {
                 original_text: _,
@@ -243,36 +246,39 @@ fn display_blocks_interactive_mode(
                 field_cursor,
             } => {
                 if user_input.is_empty() && i != cursor {
-                    print!("\x1b[3m<empty>\x1b[0m");
+                    write!(stdout, "\x1b[3m<empty>\x1b[0m")?;
                 } else {
-                    print!(
+                    write!(
+                        stdout,
                         "\x1b[3;4m{}",
                         user_input.iter().take(*field_cursor).collect::<String>()
-                    );
+                    )?;
                     if i == cursor {
                         interactive_element_in_focus = true;
-                        crossterm::execute!(stdout, crossterm::cursor::SavePosition).unwrap();
+                        crossterm::queue!(stdout, crossterm::cursor::SavePosition).unwrap();
                     }
-                    print!(
+                    write!(
+                        stdout,
                         "{}",
                         user_input.iter().skip(*field_cursor).collect::<String>()
-                    );
-                    print!("\x1b[0m");
+                    )?;
+                    write!(stdout, "\x1b[0m")?;
                 }
             }
         }
     }
-    println!();
+    writeln!(stdout)?;
     if interactive_element_in_focus {
-        crossterm::execute!(
+        crossterm::queue!(
             stdout,
             crossterm::cursor::RestorePosition,
             crossterm::cursor::Show
-        )
-        .unwrap();
+        )?;
     } else {
-        crossterm::execute!(stdout, crossterm::cursor::Hide).unwrap();
+        crossterm::queue!(stdout, crossterm::cursor::Hide)?;
     }
+    stdout.flush()?;
+    Ok(())
 }
 
 enum DisplayBlock {
