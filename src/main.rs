@@ -72,7 +72,7 @@ fn repeat_task(mut stdout: impl std::io::Write, task: &str) -> std::io::Result<u
             }
         }
     };
-    return Ok(difficulty);
+    Ok(difficulty)
 }
 
 fn handle_event_answer_overview(event: crossterm::event::Event) -> Option<u8> {
@@ -109,118 +109,114 @@ fn reset_terminal(stdout: &mut impl std::io::Write) -> std::io::Result<()> {
 fn handle_event_interactive_mode(
     event: crossterm::event::Event,
     cursor: &mut usize,
-    blocks: &mut Vec<DisplayBlock>,
+    blocks: &mut [DisplayBlock],
 ) -> bool {
-    match event {
-        crossterm::event::Event::Key(key_event) => {
-            if key_event.is_press() {
-                match key_event.code {
-                    crossterm::event::KeyCode::Char(ch) => {
-                        match &mut blocks[*cursor] {
-                            DisplayBlock::Text(_) => {
-                                // there could be no interactive elements
-                            }
-                            DisplayBlock::HiddenText {
-                                original_text: _,
-                                user_input,
-                                field_cursor,
-                            } => {
-                                user_input.insert(*field_cursor, ch);
-                                *field_cursor += 1;
-                            }
-                        };
+    if let crossterm::event::Event::Key(key_event) = event
+        && key_event.is_press()
+    {
+        match key_event.code {
+            crossterm::event::KeyCode::Char(ch) => {
+                match &mut blocks[*cursor] {
+                    DisplayBlock::Text(_) => {
+                        // there could be no interactive elements
                     }
-                    crossterm::event::KeyCode::Backspace => {
-                        match &mut blocks[*cursor] {
-                            DisplayBlock::Text(_) => {
-                                // there could be no interactive elements
-                            }
-                            DisplayBlock::HiddenText {
-                                original_text: _,
-                                user_input,
-                                field_cursor,
-                            } => {
-                                if *field_cursor != 0 {
-                                    user_input.remove(*field_cursor - 1);
-                                    *field_cursor -= 1;
-                                }
-                            }
-                        };
+                    DisplayBlock::HiddenText {
+                        original_text: _,
+                        user_input,
+                        field_cursor,
+                    } => {
+                        user_input.insert(*field_cursor, ch);
+                        *field_cursor += 1;
                     }
-                    crossterm::event::KeyCode::Delete => {
-                        match &mut blocks[*cursor] {
-                            DisplayBlock::Text(_) => {
-                                // there could be no interactive elements
-                            }
-                            DisplayBlock::HiddenText {
-                                original_text: _,
-                                user_input,
-                                field_cursor,
-                            } => {
-                                if *field_cursor < user_input.len() {
-                                    user_input.remove(*field_cursor);
-                                }
-                            }
-                        };
+                };
+            }
+            crossterm::event::KeyCode::Backspace => {
+                match &mut blocks[*cursor] {
+                    DisplayBlock::Text(_) => {
+                        // there could be no interactive elements
                     }
-                    crossterm::event::KeyCode::Enter => {
-                        let mut new_cursor = *cursor + 1;
-                        loop {
-                            if new_cursor >= blocks.len() {
-                                return true;
-                            }
-                            if matches!(blocks[new_cursor], DisplayBlock::HiddenText { .. }) {
-                                *cursor = new_cursor;
-                                break;
-                            }
-                            new_cursor += 1;
+                    DisplayBlock::HiddenText {
+                        original_text: _,
+                        user_input,
+                        field_cursor,
+                    } => {
+                        if *field_cursor != 0 {
+                            user_input.remove(*field_cursor - 1);
+                            *field_cursor -= 1;
                         }
                     }
-                    crossterm::event::KeyCode::Left => {
-                        *blocks[*cursor].field_cursor() =
-                            blocks[*cursor].field_cursor().saturating_sub(1);
+                };
+            }
+            crossterm::event::KeyCode::Delete => {
+                match &mut blocks[*cursor] {
+                    DisplayBlock::Text(_) => {
+                        // there could be no interactive elements
                     }
-                    crossterm::event::KeyCode::Right => {
-                        let user_input_len = blocks[*cursor].as_hidden_user_text().len();
-                        if *blocks[*cursor].field_cursor() < user_input_len {
-                            *blocks[*cursor].field_cursor() += 1;
+                    DisplayBlock::HiddenText {
+                        original_text: _,
+                        user_input,
+                        field_cursor,
+                    } => {
+                        if *field_cursor < user_input.len() {
+                            user_input.remove(*field_cursor);
                         }
                     }
-                    crossterm::event::KeyCode::Tab | crossterm::event::KeyCode::Down => {
-                        let mut new_cursor = *cursor + 1;
-                        loop {
-                            if new_cursor >= blocks.len() {
-                                break;
-                            }
-                            if matches!(blocks[new_cursor], DisplayBlock::HiddenText { .. }) {
-                                *cursor = new_cursor;
-                                break;
-                            }
-                            new_cursor += 1;
-                        }
+                };
+            }
+            crossterm::event::KeyCode::Enter => {
+                let mut new_cursor = *cursor + 1;
+                loop {
+                    if new_cursor >= blocks.len() {
+                        return true;
                     }
-                    crossterm::event::KeyCode::BackTab | crossterm::event::KeyCode::Up => {
-                        if *cursor == 0 {
-                            return false;
-                        }
-                        let mut new_cursor = *cursor - 1;
-                        loop {
-                            if matches!(blocks[new_cursor], DisplayBlock::HiddenText { .. }) {
-                                *cursor = new_cursor;
-                                break;
-                            }
-                            if new_cursor == 0 {
-                                break;
-                            }
-                            new_cursor -= 1;
-                        }
+                    if matches!(blocks[new_cursor], DisplayBlock::HiddenText { .. }) {
+                        *cursor = new_cursor;
+                        break;
                     }
-                    crossterm::event::KeyCode::Esc => return true,
-                    _ => {}
+                    new_cursor += 1;
                 }
             }
+            crossterm::event::KeyCode::Left => {
+                *blocks[*cursor].field_cursor() = blocks[*cursor].field_cursor().saturating_sub(1);
+            }
+            crossterm::event::KeyCode::Right => {
+                let user_input_len = blocks[*cursor].as_hidden_user_text().len();
+                if *blocks[*cursor].field_cursor() < user_input_len {
+                    *blocks[*cursor].field_cursor() += 1;
+                }
+            }
+            crossterm::event::KeyCode::Tab | crossterm::event::KeyCode::Down => {
+                let mut new_cursor = *cursor + 1;
+                loop {
+                    if new_cursor >= blocks.len() {
+                        break;
+                    }
+                    if matches!(blocks[new_cursor], DisplayBlock::HiddenText { .. }) {
+                        *cursor = new_cursor;
+                        break;
+                    }
+                    new_cursor += 1;
+                }
+            }
+            crossterm::event::KeyCode::BackTab | crossterm::event::KeyCode::Up => {
+                if *cursor == 0 {
+                    return false;
+                }
+                let mut new_cursor = *cursor - 1;
+                loop {
+                    if matches!(blocks[new_cursor], DisplayBlock::HiddenText { .. }) {
+                        *cursor = new_cursor;
+                        break;
+                    }
+                    if new_cursor == 0 {
+                        break;
+                    }
+                    new_cursor -= 1;
+                }
+            }
+            crossterm::event::KeyCode::Esc => return true,
+            _ => {}
         }
-        _ => {}
     }
     false
 }
@@ -283,7 +279,7 @@ fn display_blocks_answer_overview(
 
 fn display_blocks_interactive_mode(
     mut stdout: impl std::io::Write,
-    blocks: &Vec<DisplayBlock>,
+    blocks: &[DisplayBlock],
     cursor: usize,
 ) -> std::io::Result<()> {
     crossterm::queue!(
@@ -427,5 +423,5 @@ fn parse_task(text: &str) -> Vec<Block> {
         }
     }
 
-    return answer;
+    answer
 }
