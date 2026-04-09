@@ -11,6 +11,13 @@ Algorithm:
      `hjkl` hihi
 "#;
 
+const DIFFICULTY_ART: &str = "
+╭──────────┬─────────┬─────────┬─────────╮
+│ \x1b[31m1. again\x1b[0m │ \x1b[33m2. hard\x1b[0m │ \x1b[36m3. good\x1b[0m │ \x1b[32m4. easy\x1b[0m │
+╰──────────┴─────────┴─────────┴─────────╯
+";
+const DIFFICULTY_ART_WIDTH: u16 = 42;
+
 fn main() {
     let example = EXAMPLE_TEXT.trim();
     let parsed = parse_task(example);
@@ -32,19 +39,45 @@ fn main() {
     loop {
         display_blocks_interactive_mode(&mut stdout, &blocks, cursor).unwrap();
         let event = crossterm::event::read().unwrap();
-        if handle_event(event, &mut cursor, &mut blocks) {
+        if handle_event_interactive_mode(event, &mut cursor, &mut blocks) {
             break;
         }
         // handle all available events
         while crossterm::event::poll(Duration::ZERO).unwrap() {
             let event = crossterm::event::read().unwrap();
-            if handle_event(event, &mut cursor, &mut blocks) {
+            if handle_event_interactive_mode(event, &mut cursor, &mut blocks) {
                 break;
             }
         }
     }
+    let difficulty = 'outer: loop {
+        display_blocks_answer_overview(&mut stdout, &blocks).unwrap();
+        let event = crossterm::event::read().unwrap();
+        if let Some(difficulty) = handle_event_answer_overview(event) {
+            break 'outer difficulty;
+        }
+        // handle all available events
+        while crossterm::event::poll(Duration::ZERO).unwrap() {
+            let event = crossterm::event::read().unwrap();
+            if let Some(difficulty) = handle_event_answer_overview(event) {
+                break 'outer difficulty;
+            }
+        }
+    };
     reset_terminal(&mut stdout).unwrap();
-    print_blocks_answer_overview(&mut stdout, &blocks).unwrap();
+}
+
+fn handle_event_answer_overview(event: crossterm::event::Event) -> Option<u8> {
+    match event {
+        crossterm::event::Event::Key(key) => match key.code {
+            crossterm::event::KeyCode::Char('1') => Some(1),
+            crossterm::event::KeyCode::Char('2') => Some(2),
+            crossterm::event::KeyCode::Char('3') => Some(3),
+            crossterm::event::KeyCode::Char('4') => Some(4),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn enter_raw_terminal_mode(stdout: &mut impl std::io::Write) -> std::io::Result<()> {
@@ -65,7 +98,7 @@ fn reset_terminal(stdout: &mut impl std::io::Write) -> std::io::Result<()> {
 }
 
 /// Returns `true` if should quit.
-fn handle_event(
+fn handle_event_interactive_mode(
     event: crossterm::event::Event,
     cursor: &mut usize,
     blocks: &mut Vec<DisplayBlock>,
@@ -184,10 +217,16 @@ fn handle_event(
     false
 }
 
-fn print_blocks_answer_overview(
+fn display_blocks_answer_overview(
     stdout: &mut std::io::Stdout,
     blocks: &Vec<DisplayBlock>,
 ) -> std::io::Result<()> {
+    crossterm::queue!(
+        stdout,
+        crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
+        crossterm::cursor::MoveTo(0, 0),
+        crossterm::cursor::Hide,
+    )?;
     write!(stdout, "\x1b[0m")?;
     for block in blocks {
         match block {
@@ -218,7 +257,18 @@ fn print_blocks_answer_overview(
             }
         }
     }
-    writeln!(stdout)?;
+    let window_size = crossterm::terminal::window_size()?;
+    // panic!("{:?}", window_size);
+    for (i, line) in DIFFICULTY_ART.trim().lines().enumerate() {
+        crossterm::queue!(
+            stdout,
+            crossterm::cursor::MoveTo(
+                (window_size.columns - DIFFICULTY_ART_WIDTH) / 2,
+                window_size.rows - 5 + i as u16,
+            )
+        )?;
+        write!(stdout, "{}\r\n", line)?;
+    }
     stdout.flush()?;
     Ok(())
 }
