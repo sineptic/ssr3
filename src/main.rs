@@ -33,12 +33,14 @@ fn main() {
 /// Repeat task and get difficulty or `None` on abortion.
 fn repeat_task(mut stdout: impl std::io::Write, task: &str) -> std::io::Result<Option<u8>> {
     let parsed = parse_task(task);
+    // panic!("{parsed:#?}");
     let mut blocks: Vec<DisplayBlock> = parsed.into_iter().map(Into::into).collect();
 
     let mut cursor = 0;
     for (i, block) in blocks.iter().enumerate() {
         match block {
             DisplayBlock::Text(_) => {}
+            DisplayBlock::Note(_) => {}
             DisplayBlock::HiddenText { .. } => {
                 cursor = i;
                 break;
@@ -119,7 +121,7 @@ fn handle_event_interactive_mode(
         match key_event.code {
             crossterm::event::KeyCode::Char(ch) => {
                 match &mut blocks[*cursor] {
-                    DisplayBlock::Text(_) => {
+                    DisplayBlock::Text(_) | DisplayBlock::Note(_) => {
                         // there could be no interactive elements
                     }
                     DisplayBlock::HiddenText {
@@ -134,7 +136,7 @@ fn handle_event_interactive_mode(
             }
             crossterm::event::KeyCode::Backspace => {
                 match &mut blocks[*cursor] {
-                    DisplayBlock::Text(_) => {
+                    DisplayBlock::Text(_) | DisplayBlock::Note(_) => {
                         // there could be no interactive elements
                     }
                     DisplayBlock::HiddenText {
@@ -151,7 +153,7 @@ fn handle_event_interactive_mode(
             }
             crossterm::event::KeyCode::Delete => {
                 match &mut blocks[*cursor] {
-                    DisplayBlock::Text(_) => {
+                    DisplayBlock::Text(_) | DisplayBlock::Note(_) => {
                         // there could be no interactive elements
                     }
                     DisplayBlock::HiddenText {
@@ -239,6 +241,9 @@ fn display_blocks_answer_overview(
             DisplayBlock::Text(inner) => {
                 write!(stdout, "{}", inner.replace("\n", "\r\n"))?;
             }
+            DisplayBlock::Note(inner) => {
+                write!(stdout, "\x1b[2m{}\r\n\x1b[0m", inner.replace("\n", "\r\n"))?;
+            }
             DisplayBlock::HiddenText {
                 original_text,
                 user_input,
@@ -292,6 +297,7 @@ fn display_blocks_interactive_mode(
             DisplayBlock::Text(inner) => {
                 write!(stdout, "{}", inner.replace("\n", "\r\n"))?;
             }
+            DisplayBlock::Note(_) => {}
             DisplayBlock::HiddenText {
                 original_text: _,
                 user_input,
@@ -340,6 +346,7 @@ enum DisplayBlock {
         user_input: Vec<char>,
         field_cursor: usize,
     },
+    Note(String),
 }
 
 impl DisplayBlock {
@@ -367,6 +374,7 @@ impl From<Block> for DisplayBlock {
                 user_input: Vec::new(),
                 field_cursor: 0,
             },
+            Block::Note { text, indented: _ } => DisplayBlock::Note(text),
         }
     }
 }
@@ -375,6 +383,7 @@ impl From<Block> for DisplayBlock {
 enum Block {
     Text(String),
     HiddenText(String),
+    Note { text: String, indented: bool },
 }
 impl Block {
     fn grow(&mut self, ch: char) {
@@ -385,15 +394,25 @@ impl Block {
             Block::HiddenText(this) => {
                 this.push(ch);
             }
+            Block::Note { text, indented: _ } => {
+                text.push(ch);
+            }
         }
     }
+}
+
+fn is_next(tail: &[char], pattern: &str) -> bool {
+    let pattern: Vec<char> = pattern.chars().collect();
+    tail.len() >= pattern.len() && tail[..pattern.len()] == pattern
 }
 
 fn parse_task(text: &str) -> Vec<Block> {
     let mut answer = Vec::new();
     let mut block = Block::Text(String::new());
-    for ch in text.chars() {
-        if ch == '`' {
+    let text = text.chars().collect::<Vec<_>>();
+    let mut text_cursor = 0;
+    while text_cursor < text.len() {
+        if is_next(&text[text_cursor..], "`") && !matches!(block, Block::Note { .. }) {
             match block {
                 Block::Text(ref inner) => {
                     if !inner.is_empty() {
@@ -405,10 +424,62 @@ fn parse_task(text: &str) -> Vec<Block> {
                     answer.push(block);
                     block = Block::Text(String::new());
                 }
+                Block::Note { .. } => unreachable!(),
             }
-            continue;
+            text_cursor += 1;
+        } else if is_next(&text[text_cursor..], "//") && !matches!(block, Block::Note { .. }) {
+            text_cursor += 2;
+            match block {
+                Block::Text(ref inner) => {
+                    if !inner.is_empty() {
+                        answer.push(block);
+                    }
+                    let indented = is_next(&text[text_cursor..], " ");
+                    if indented {
+                        text_cursor += 1;
+                    }
+                    block = Block::Note {
+                        text: String::new(),
+                        indented,
+                    };
+                }
+                Block::HiddenText(_) => {
+                    panic!("note interrupted hidden text");
+                }
+                Block::Note { .. } => unreachable!(),
+            }
+        } else if is_next(&text[text_cursor..], "\n")
+            && let Block::Note { ref text, indented } = block
+        {
+            text_cursor += 1;
+            if let Some(Block::Note {
+                text: prev_text,
+                indented: prev_idented,
+            }) = answer.last_mut()
+            {
+                if *prev_idented && !indented {
+                    let mut new_text = String::new();
+                    new_text.push(' ');
+                    new_text.push_str(&prev_text.replace("\n", "\n "));
+                    new_text.push('\n');
+                    new_text.push_str(text);
+                    *prev_text = new_text;
+                } else {
+                    prev_text.push('\n');
+                    if indented && !*prev_idented {
+                        prev_text.push(' ');
+                    }
+                    prev_text.push_str(text);
+                }
+                *prev_idented = indented && *prev_idented;
+            } else {
+                answer.push(block);
+            }
+            block = Block::Text(String::new());
+        } else {
+            block.grow(text[text_cursor]);
+            text_cursor += 1;
         }
-        block.grow(ch);
     }
     match block {
         Block::Text(ref inner) => {
@@ -418,6 +489,9 @@ fn parse_task(text: &str) -> Vec<Block> {
         }
         Block::HiddenText(_) => {
             panic!("Unclosed hidden text field.");
+        }
+        Block::Note { .. } => {
+            answer.push(block);
         }
     }
 
