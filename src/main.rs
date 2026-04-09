@@ -24,13 +24,14 @@ fn main() {
     let mut stdout = std::io::stdout();
     enter_raw_terminal_mode(&mut stdout).unwrap();
 
-    repeat_task(&mut stdout, &example).unwrap();
+    let difficulty = repeat_task(&mut stdout, &example).unwrap();
 
     reset_terminal(&mut stdout).unwrap();
+    dbg!(difficulty);
 }
 
-/// Repeat task and get difficulty
-fn repeat_task(mut stdout: impl std::io::Write, task: &str) -> std::io::Result<u8> {
+/// Repeat task and get difficulty or `None` on abortion.
+fn repeat_task(mut stdout: impl std::io::Write, task: &str) -> std::io::Result<Option<u8>> {
     let parsed = parse_task(task);
     let mut blocks: Vec<DisplayBlock> = parsed.into_iter().map(Into::into).collect();
 
@@ -75,13 +76,14 @@ fn repeat_task(mut stdout: impl std::io::Write, task: &str) -> std::io::Result<u
     Ok(difficulty)
 }
 
-fn handle_event_answer_overview(event: crossterm::event::Event) -> Option<u8> {
+fn handle_event_answer_overview(event: crossterm::event::Event) -> Option<Option<u8>> {
     match event {
         crossterm::event::Event::Key(key) => match key.code {
-            crossterm::event::KeyCode::Char('1') => Some(1),
-            crossterm::event::KeyCode::Char('2') => Some(2),
-            crossterm::event::KeyCode::Char('3') => Some(3),
-            crossterm::event::KeyCode::Char('4') => Some(4),
+            crossterm::event::KeyCode::Char('1') => Some(Some(1)),
+            crossterm::event::KeyCode::Char('2') => Some(Some(2)),
+            crossterm::event::KeyCode::Char('3') => Some(Some(3)),
+            crossterm::event::KeyCode::Char('4') => Some(Some(4)),
+            crossterm::event::KeyCode::Esc => Some(None),
             _ => None,
         },
         _ => None,
