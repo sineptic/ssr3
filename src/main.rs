@@ -1,15 +1,15 @@
 use std::time::Duration;
 
-const EXAMPLE_TEXT: &str = r#"
-13 task - `hi`
-Algorithm:
-1. `it exists`
-2. `not bla bla`
-3. - for `nouns, adjectives, etc.`:
-     `asdf asdf`
-   - for `qwerty`:
-     `hjkl` hihi
-"#;
+// const EXAMPLE_TEXT: &str = r#"
+// 13 task - `hi`
+// Algorithm:
+// 1. `it exists`
+// 2. `not bla bla`
+// 3. - for `nouns, adjectives, etc.`:
+//      `asdf asdf`
+//    - for `qwerty`:
+//      `hjkl` hihi
+// "#;
 
 const DIFFICULTY_ART: &str = "
 ╭──────────┬─────────┬─────────┬─────────╮
@@ -19,12 +19,12 @@ const DIFFICULTY_ART: &str = "
 const DIFFICULTY_ART_WIDTH: u16 = 42;
 
 fn main() {
-    let example = EXAMPLE_TEXT.trim();
-
+    let example = std::io::read_to_string(std::io::stdin()).unwrap();
+    // let example = EXAMPLE_TEXT.trim();
     let mut stdout = std::io::stdout();
     enter_raw_terminal_mode(&mut stdout).unwrap();
 
-    repeat_task(&mut stdout, example).unwrap();
+    repeat_task(&mut stdout, &example).unwrap();
 
     reset_terminal(&mut stdout).unwrap();
 }
