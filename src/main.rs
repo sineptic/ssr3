@@ -1,4 +1,4 @@
-use std::{io::Write, time::Duration};
+use std::time::Duration;
 
 const EXAMPLE_TEXT: &str = r#"
 13 task - `hi`
@@ -20,11 +20,19 @@ const DIFFICULTY_ART_WIDTH: u16 = 42;
 
 fn main() {
     let example = EXAMPLE_TEXT.trim();
-    let parsed = parse_task(example);
-    let mut blocks: Vec<DisplayBlock> = parsed.into_iter().map(Into::into).collect();
 
     let mut stdout = std::io::stdout();
     enter_raw_terminal_mode(&mut stdout).unwrap();
+
+    repeat_task(&mut stdout, example).unwrap();
+
+    reset_terminal(&mut stdout).unwrap();
+}
+
+/// Repeat task and get difficulty
+fn repeat_task(mut stdout: impl std::io::Write, task: &str) -> std::io::Result<u8> {
+    let parsed = parse_task(task);
+    let mut blocks: Vec<DisplayBlock> = parsed.into_iter().map(Into::into).collect();
 
     let mut cursor = 0;
     for (i, block) in blocks.iter().enumerate() {
@@ -37,34 +45,34 @@ fn main() {
         }
     }
     loop {
-        display_blocks_interactive_mode(&mut stdout, &blocks, cursor).unwrap();
-        let event = crossterm::event::read().unwrap();
+        display_blocks_interactive_mode(&mut stdout, &blocks, cursor)?;
+        let event = crossterm::event::read()?;
         if handle_event_interactive_mode(event, &mut cursor, &mut blocks) {
             break;
         }
         // handle all available events
-        while crossterm::event::poll(Duration::ZERO).unwrap() {
-            let event = crossterm::event::read().unwrap();
+        while crossterm::event::poll(Duration::ZERO)? {
+            let event = crossterm::event::read()?;
             if handle_event_interactive_mode(event, &mut cursor, &mut blocks) {
                 break;
             }
         }
     }
     let difficulty = 'outer: loop {
-        display_blocks_answer_overview(&mut stdout, &blocks).unwrap();
-        let event = crossterm::event::read().unwrap();
+        display_blocks_answer_overview(&mut stdout, &blocks)?;
+        let event = crossterm::event::read()?;
         if let Some(difficulty) = handle_event_answer_overview(event) {
             break 'outer difficulty;
         }
         // handle all available events
-        while crossterm::event::poll(Duration::ZERO).unwrap() {
-            let event = crossterm::event::read().unwrap();
+        while crossterm::event::poll(Duration::ZERO)? {
+            let event = crossterm::event::read()?;
             if let Some(difficulty) = handle_event_answer_overview(event) {
                 break 'outer difficulty;
             }
         }
     };
-    reset_terminal(&mut stdout).unwrap();
+    return Ok(difficulty);
 }
 
 fn handle_event_answer_overview(event: crossterm::event::Event) -> Option<u8> {
@@ -218,7 +226,7 @@ fn handle_event_interactive_mode(
 }
 
 fn display_blocks_answer_overview(
-    stdout: &mut std::io::Stdout,
+    mut stdout: impl std::io::Write,
     blocks: &Vec<DisplayBlock>,
 ) -> std::io::Result<()> {
     crossterm::queue!(
@@ -274,7 +282,7 @@ fn display_blocks_answer_overview(
 }
 
 fn display_blocks_interactive_mode(
-    stdout: &mut std::io::Stdout,
+    mut stdout: impl std::io::Write,
     blocks: &Vec<DisplayBlock>,
     cursor: usize,
 ) -> std::io::Result<()> {
