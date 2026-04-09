@@ -19,22 +19,40 @@ jobs:
         run: cargo clippy -- -Dwarnings
 
   build:
-    runs-on: ${{ matrix.os }}-latest
-    strategy:
-      matrix:
-        os: [ubuntu, windows]
+    runs-on: ubuntu-latest
+    # runs-on: ${{ matrix.os }}-latest
+    # strategy:
+    #   matrix:
+    #     os: [ubuntu, windows]
     needs: check
 
     steps:
       - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --release
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+      - name: add musl target
+        run: rustup target add x86_64-unknown-linux-musl x86_64-pc-windows-gnu
+      - name: Install cargo-binstall
+        run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+      - name: Install cargo-zigbuild
+        run: cargo binstall cargo-zigbuild --no-confirm --force
+
+      - name: Build linux
+        run: cargo zigbuild --release --target x86_64-unknown-linux-musl
+      - name: Build windows
+        run: cargo zigbuild --release --target x86_64-pc-windows-gnu
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v6
         with:
-          name: ssr3-${{ matrix.os }}-x86_64
-          path: |
-            target/release/ssr3
-            target/release/ssr3.exe
+          name: ssr3-linux-x86_64
+          path: target/x86_64-unknown-linux-musl/release/ssr3
+          if-no-files-found: error
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ssr3-windows-x86_64
+          path: target/x86_64-pc-windows-gnu/release/ssr3.exe
           if-no-files-found: error
