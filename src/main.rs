@@ -261,15 +261,11 @@ fn display_blocks_answer_overview(
             }
         }
     }
-    let window_size = crossterm::terminal::window_size()?;
-    // panic!("{:?}", window_size);
+    let (columns, rows) = crossterm::terminal::size()?;
     for (i, line) in DIFFICULTY_ART.trim().lines().enumerate() {
         crossterm::queue!(
             stdout,
-            crossterm::cursor::MoveTo(
-                (window_size.columns - DIFFICULTY_ART_WIDTH) / 2,
-                window_size.rows - 5 + i as u16,
-            )
+            crossterm::cursor::MoveTo((columns - DIFFICULTY_ART_WIDTH) / 2, rows - 5 + i as u16)
         )?;
         write!(stdout, "{}\r\n", line)?;
     }
